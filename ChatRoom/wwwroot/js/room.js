@@ -1,4 +1,8 @@
 // room.js — Room page orchestrator: SignalR + WebRTC + Audio + UI
+//
+// iOS Safari requires getUserMedia to be called directly inside a user gesture
+// (tap/click). Any async gap between the gesture and the call can block mic.
+// Solution: "Odaya Katıl" overlay — audio init happens inside its click handler.
 
 (async () => {
     // ── Read server-rendered data ──────────────────────────────────────────
@@ -8,6 +12,8 @@
     const color    = dataEl.dataset.color;
 
     // ── DOM refs ───────────────────────────────────────────────────────────
+    const overlay       = document.getElementById('join-overlay');
+    const btnJoinRoom   = document.getElementById('btn-join-room');
     const messagesEl    = document.getElementById('messages');
     const messageInput  = document.getElementById('message-input');
     const btnSend       = document.getElementById('btn-send');
@@ -18,27 +24,15 @@
     const gateValue     = document.getElementById('gate-value');
     const micSelect     = document.getElementById('mic-device');
     const usersList     = document.getElementById('users-list');
-    const userCountEl   = document.getElementById('user-count');        // header
-    const userCountBadge = document.getElementById('user-count-badge'); // sidebar
+    const userCountEl    = document.getElementById('user-count');
+    const userCountBadge = document.getElementById('user-count-badge');
 
-    // ── Local state ────────────────────────────────────────────────────────
+    // ── State ──────────────────────────────────────────────────────────────
     const users = {};
     let myConnectionId = null;
+    let audioStream    = null;  // set after user gesture
 
-    // ── Mic enumeration — independent of SignalR ───────────────────────────
-    try {
-        const mics = await AudioManager.enumerateMics();
-        populateMicSelect(mics);
-    } catch (err) {
-        console.warn('Mikrofon listesi alınamadı:', err);
-        const opt = document.createElement('option');
-        opt.textContent = 'Varsayılan mikrofon';
-        opt.value = '';
-        micSelect.appendChild(opt);
-    }
-
-    // ── SignalR — color passed as hex without #, re-added on server ────────
-    // We strip # to avoid URL encoding issues (%23 vs #)
+    // ── SignalR ────────────────────────────────────────────────────────────
     const colorHex = color.startsWith('#') ? color.slice(1) : color;
 
     const connection = new signalR.HubConnectionBuilder()
@@ -47,7 +41,7 @@
         .configureLogging(signalR.LogLevel.Warning)
         .build();
 
-    // ── SignalR Event Handlers ─────────────────────────────────────────────
+    // ── SignalR Handlers ───────────────────────────────────────────────────
 
     connection.on('RoomJoined', async (data) => {
         const existingUsers = data.existingUsers || [];
@@ -60,28 +54,14 @@
         }
         updateUserCount();
 
-        // ── Init audio pipeline ──────────────────────────────────────────
-        const selectedDeviceId = micSelect.value || null;
-
-        let stream;
-        try {
-            stream = await AudioManager.init(selectedDeviceId, (isSpeaking) => {
-                connection.invoke('SetSpeaking', isSpeaking).catch(console.error);
-                updateSpeakingUI(myConnectionId, isSpeaking);
+        // WebRTC mesh — only if we have a stream (mic permitted)
+        if (audioStream) {
+            WebRTCManager.init(audioStream, connection, (connId, remoteStream) => {
+                AudioManager.attachRemoteStream(connId, remoteStream);
             });
-        } catch (err) {
-            console.error('Mikrofon başlatılamadı:', err);
-            appendSystemMessage('⚠️ Mikrofon erişimi sağlanamadı.');
-            return;
-        }
-
-        // ── WebRTC mesh ──────────────────────────────────────────────────
-        WebRTCManager.init(stream, connection, (connId, remoteStream) => {
-            AudioManager.attachRemoteStream(connId, remoteStream);
-        });
-
-        for (const u of existingUsers) {
-            await WebRTCManager.createOffer(u.connectionId);
+            for (const u of existingUsers) {
+                await WebRTCManager.createOffer(u.connectionId);
+            }
         }
     });
 
@@ -113,14 +93,61 @@
     connection.on('ReceiveIceCandidate', async (fromId, candidate) => WebRTCManager.handleIceCandidate(fromId, candidate));
 
     connection.on('UserSpeaking', (connectionId, isSpeaking) => updateSpeakingUI(connectionId, isSpeaking));
-
-    // Ignore RoomCounts on room page
     connection.on('RoomCounts', () => {});
+
+    // ── Join overlay button ────────────────────────────────────────────────
+    // IMPORTANT: getUserMedia MUST be the first async call inside this handler.
+    // iOS Safari blocks mic if there's any awaited code before getUserMedia.
+
+    btnJoinRoom.addEventListener('click', async () => {
+        btnJoinRoom.disabled = true;
+        btnJoinRoom.textContent = 'Bağlanıyor...';
+
+        // 1. Mic init — must be first, directly in user gesture handler
+        try {
+            // Enumerate first (triggers permission prompt, populates labels)
+            const mics = await AudioManager.enumerateMics();
+            populateMicSelect(mics);
+
+            audioStream = await AudioManager.init(micSelect.value || null, (isSpeaking) => {
+                connection.invoke('SetSpeaking', isSpeaking).catch(console.error);
+                updateSpeakingUI(myConnectionId, isSpeaking);
+            });
+        } catch (err) {
+            console.warn('Mikrofon erişimi reddedildi veya bulunamadı:', err);
+            appendSystemMessage('⚠️ Mikrofon erişimi sağlanamadı — sadece yazılı sohbet aktif.');
+        }
+
+        // 2. Hide overlay
+        overlay.classList.add('hidden');
+
+        // 3. Connect SignalR
+        try {
+            await connection.start();
+        } catch (err) {
+            console.error('SignalR bağlantısı kurulamadı:', err);
+            appendSystemMessage('⚠️ Sunucu bağlantısı kurulamadı. Sayfayı yenileyin.');
+            overlay.classList.remove('hidden');
+            btnJoinRoom.disabled = false;
+            btnJoinRoom.textContent = 'Tekrar Dene';
+            return;
+        }
+
+        myConnectionId = connection.connectionId;
+
+        // Add self
+        users[myConnectionId] = { nickname, color, isMe: true };
+        addUserCard(myConnectionId, nickname, color, true);
+        updateUserCount();
+
+        // 4. Join room → triggers RoomJoined
+        await connection.invoke('JoinRoom', roomId);
+    });
 
     // ── UI: User Cards ─────────────────────────────────────────────────────
 
     function addUserCard(connId, nick, userColor, isMe) {
-        if (document.getElementById(`user-${connId}`)) return; // guard dup
+        if (document.getElementById(`user-${connId}`)) return;
 
         const card = document.createElement('div');
         card.className = 'user-card';
@@ -160,13 +187,12 @@
             icon.textContent = '🔊';
 
             const slider = document.createElement('input');
-            slider.type = 'range';
+            slider.type  = 'range';
             slider.className = 'volume-slider';
-            slider.min = '0';
-            slider.max = '1';
-            slider.step = '0.05';
+            slider.min   = '0';
+            slider.max   = '1';
+            slider.step  = '0.05';
             slider.value = '1';
-            slider.title = 'Ses seviyesi';
             slider.addEventListener('input', () => AudioManager.setRemoteVolume(connId, slider.value));
 
             volRow.appendChild(icon);
@@ -194,10 +220,10 @@
     // ── UI: Messages ───────────────────────────────────────────────────────
 
     function appendMessage(msg) {
-        const div = document.createElement('div');
+        const div    = document.createElement('div');
         div.className = 'message';
 
-        const time = document.createElement('span');
+        const time   = document.createElement('span');
         time.className = 'msg-time';
         time.textContent = msg.timestamp;
 
@@ -206,9 +232,9 @@
         sender.style.color = msg.color;
         sender.textContent = msg.nickname;
 
-        const text = document.createElement('span');
+        const text   = document.createElement('span');
         text.className = 'msg-text';
-        text.textContent = msg.text;   // textContent — no XSS risk
+        text.textContent = msg.text;
 
         div.appendChild(time);
         div.appendChild(sender);
@@ -239,9 +265,9 @@
 
     btnMute.addEventListener('click', () => {
         const nowMuted = AudioManager.toggleMute();
-        btnMute.querySelector('.icon-mic').style.display    = nowMuted ? 'none'  : '';
+        btnMute.querySelector('.icon-mic').style.display     = nowMuted ? 'none' : '';
         btnMute.querySelector('.icon-mic-off').style.display = nowMuted ? ''     : 'none';
-        btnMute.querySelector('.mute-label').textContent    = nowMuted ? 'Mikrofon Kapalı' : 'Mikrofon Açık';
+        btnMute.querySelector('.mute-label').textContent     = nowMuted ? 'Mikrofon Kapalı' : 'Mikrofon Açık';
         btnMute.classList.toggle('muted', nowMuted);
     });
 
@@ -258,11 +284,13 @@
     });
 
     micSelect.addEventListener('change', async () => {
+        if (!audioStream) return;
         try {
             const newStream = await AudioManager.init(micSelect.value || null, (isSpeaking) => {
                 connection.invoke('SetSpeaking', isSpeaking).catch(console.error);
                 updateSpeakingUI(myConnectionId, isSpeaking);
             });
+            audioStream = newStream;
             await WebRTCManager.replaceStream(newStream);
         } catch (err) {
             console.error('Mikrofon değiştirilemedi:', err);
@@ -282,26 +310,6 @@
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
-
-    // ── Start ──────────────────────────────────────────────────────────────
-
-    try {
-        await connection.start();
-    } catch (err) {
-        console.error('SignalR bağlantısı kurulamadı:', err);
-        appendSystemMessage('⚠️ Sunucu bağlantısı kurulamadı. Sayfayı yenileyin.');
-        return;
-    }
-
-    myConnectionId = connection.connectionId;
-
-    // Add self to user list
-    users[myConnectionId] = { nickname, color, isMe: true };
-    addUserCard(myConnectionId, nickname, color, true);
-    updateUserCount();
-
-    // Join room → triggers RoomJoined from server
-    await connection.invoke('JoinRoom', roomId);
 
     // ── Cleanup ────────────────────────────────────────────────────────────
 

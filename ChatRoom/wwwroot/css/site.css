@@ -852,3 +852,89 @@ input, select, textarea { font-family: inherit; }
     line-height: 1.4;
     margin-top: 2px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   JOIN OVERLAY (iOS Safari getUserMedia fix)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.join-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(11, 13, 20, .92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    transition: opacity .25s;
+}
+
+.join-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.join-overlay-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xl);
+    padding: 40px 32px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    animation: card-in .35s cubic-bezier(.16,1,.3,1) both;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.join-overlay-icon {
+    width: 64px;
+    height: 64px;
+    background: var(--accent-dim);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+
+.join-overlay-card h2 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -.3px;
+}
+
+.join-overlay-card p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.btn-join-room {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 12px 28px;
+    font-size: 15px;
+    font-weight: 600;
+    margin-top: 8px;
+    transition: background .15s, transform .1s, box-shadow .15s;
+    box-shadow: 0 4px 14px var(--accent-glow);
+}
+.btn-join-room:hover  { background: var(--accent-hover); transform: translateY(-1px); }
+.btn-join-room:active { transform: translateY(0); }
+.btn-join-room:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+
+.join-overlay-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+}

@@ -10,6 +10,25 @@
      data-color="@ViewBag.Color">
 </div>
 
+<!-- Join overlay — iOS Safari requires getUserMedia inside a direct user gesture -->
+<div id="join-overlay" class="join-overlay">
+    <div class="join-overlay-card">
+        <div class="join-overlay-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+            </svg>
+        </div>
+        <h2># @ViewBag.RoomName</h2>
+        <p>Odaya katılmak için mikrofon iznine ihtiyaç var</p>
+        <button id="btn-join-room" class="btn-join-room">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Odaya Katıl
+        </button>
+        <span class="join-overlay-hint">Tarayıcı mikrofon izni isteyecek</span>
+    </div>
+</div>
+
 <div class="room-layout">
 
     <!-- Header -->
