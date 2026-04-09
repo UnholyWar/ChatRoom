@@ -1,0 +1,69 @@
+@{
+    ViewData["Title"] = "ChatRoom";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="login-page">
+    <div class="login-bg"></div>
+
+    <div class="login-card">
+        <div class="login-logo">
+            <div class="logo-mark">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                    <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="currentColor"/>
+                </svg>
+            </div>
+            <h1>ChatRoom</h1>
+        </div>
+        <p class="login-subtitle">Sesli ve yazılı sohbet platformu</p>
+
+        <form action="/Home/Join" method="post" id="login-form">
+            <div class="field">
+                <label for="nickname">Kullanıcı Adı</label>
+                <input type="text"
+                       id="nickname"
+                       name="nickname"
+                       maxlength="20"
+                       placeholder="Adınızı girin"
+                       autocomplete="off"
+                       spellcheck="false"
+                       required />
+            </div>
+
+            <div class="field">
+                <label>Profil Rengi</label>
+                <div class="color-row">
+                    <button type="button" class="swatch active" data-color="#4f6ef7" style="--c:#4f6ef7"></button>
+                    <button type="button" class="swatch" data-color="#10b981" style="--c:#10b981"></button>
+                    <button type="button" class="swatch" data-color="#f59e0b" style="--c:#f59e0b"></button>
+                    <button type="button" class="swatch" data-color="#ef4444" style="--c:#ef4444"></button>
+                    <button type="button" class="swatch" data-color="#8b5cf6" style="--c:#8b5cf6"></button>
+                    <button type="button" class="swatch" data-color="#ec4899" style="--c:#ec4899"></button>
+                    <button type="button" class="swatch" data-color="#06b6d4" style="--c:#06b6d4"></button>
+                    <button type="button" class="swatch" data-color="#f97316" style="--c:#f97316"></button>
+                    <label class="swatch-custom" title="Özel renk">
+                        <input type="color" id="color" name="color" value="#4f6ef7" tabindex="-1" />
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                    </label>
+                </div>
+                <div class="color-bar" id="color-bar"></div>
+            </div>
+
+            <button type="submit" class="btn-join" id="btn-join">
+                <span>Giriş Yap</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+        </form>
+
+        <div class="last-login-bar" id="last-login" style="display:none">
+            <div class="ll-dot" id="ll-dot"></div>
+            <span class="ll-label">Son oturum:</span>
+            <span class="ll-name" id="last-login-info"></span>
+            <button type="button" class="ll-use" id="btn-use-last">Kullan</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/join.js" asp-append-version="true"></script>
+}
